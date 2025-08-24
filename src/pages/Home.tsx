@@ -60,9 +60,9 @@ export default function Home() {
   ];
 
   const stats = [
-    { icon: FileText, label: "Documents Processed", value: "10,000+" },
-    { icon: Users, label: "Active Users", value: "500+" },
-    { icon: Clock, label: "Avg Response Time", value: "< 2s" }
+    { icon: FileText, label: "Documents Processed", value: "High Document Upload Support" },
+    { icon: Users, label: "Active Users", value: "Growing User Base" },
+    { icon: Clock, label: "Avg Response Time", value: "Quick Responses" }
   ];
 
   return (
@@ -250,7 +250,7 @@ export default function Home() {
                 </Button>
               </Link>
               <Link to="/contact">
-                <Button variant="outline" size="xl" className="w-full sm:w-auto border-white/20 text-white hover:bg-white/10">
+                <Button variant="secondary" size="xl" className="w-full sm:w-auto bg-white text-primary-dark hover:bg-white/90 font-semibold">
                   Contact Sales
                 </Button>
               </Link>

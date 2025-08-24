@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import ReactMarkdown from 'react-markdown';
 import { 
   Send, 
   Mic, 
@@ -73,17 +74,78 @@ export default function Chat() {
     setInputValue("");
     setIsLoading(true);
 
-    // Simulate AI response
-    setTimeout(() => {
+    try {
+      const response = await fetch(import.meta.env.VITE_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          question: inputValue,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+
+      // Get the response as text first
+      const rawResponse = await response.text();
+      
+      let parsedResponse;
+      try {
+        // Try to parse the string response as JSON
+        parsedResponse = JSON.parse(rawResponse);
+      } catch (error) {
+        // If parsing fails, use the raw string response
+        parsedResponse = { response: rawResponse };
+      }
+      
+      // Extract and format the message content from the parsed response
+      let messageContent = typeof parsedResponse === 'string' 
+        ? parsedResponse 
+        : parsedResponse.response || parsedResponse.message || parsedResponse.answer || 
+          (typeof parsedResponse === 'object' ? JSON.stringify(parsedResponse) : rawResponse);
+
+      // Format the content if it contains policy information
+      if (messageContent.includes("HR policies") || messageContent.includes("Policy")) {
+        const sections = messageContent.split(/(?=\*\*[\w\s&]+\*\*)/);
+        messageContent = sections.map(section => {
+          // Extract policy name and content
+          const policyMatch = section.match(/\*\*([^*]+)\*\*(.+?)(?=\*\*|$)/s);
+          if (policyMatch) {
+            const [_, policyName, content] = policyMatch;
+            return `📋 **${policyName}**\n${content.trim()}\n`;
+          }
+          return section;
+        }).join("\n");
+
+        // Add a header if it's HR policy content
+        if (messageContent.includes("📋")) {
+          messageContent = `# HR Policies Overview\n\n${messageContent}`;
+        }
+      }
+      
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
-        content: `I understand you're asking about "${inputValue}". Based on your internal documentation, here's what I found: This is a simulated response. In a real implementation, this would connect to your n8n workflow and AI service to provide accurate answers from your knowledge base.`,
+        content: messageContent,
         isUser: false,
         timestamp: new Date(),
       };
+      
       setMessages(prev => [...prev, aiResponse]);
+    } catch (error) {
+      console.error('Error:', error);
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: 'Sorry, there was an error processing your request. Please try again.',
+        isUser: false,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   const handleVoiceInput = () => {
@@ -212,12 +274,18 @@ export default function Chat() {
                         ? "bg-primary text-white rounded-br-md" 
                         : "bg-card border border-border rounded-bl-md"
                     )}>
-                      <p className={cn(
-                        "text-sm leading-relaxed",
-                        message.isUser ? "text-white" : "text-foreground"
+                      <div className={cn(
+                        "text-sm leading-relaxed prose prose-sm max-w-none prose-headings:mb-2 prose-p:my-1 prose-strong:font-semibold",
+                        message.isUser ? "text-white prose-invert" : "text-foreground"
                       )}>
-                        {message.content}
-                      </p>
+                        <div dangerouslySetInnerHTML={{ 
+                          __html: message.content
+                            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+                            .replace(/\n\n/g, '<br/><br/>')
+                            .replace(/📋/g, '<span class="text-xl">📋</span>')
+                            .replace(/# ([^\n]+)/g, '<h1 class="text-xl font-bold mb-4">$1</h1>')
+                        }} />
+                      </div>
                     </div>
                     <div className="flex items-center space-x-1 mt-1 text-xs text-muted-foreground">
                       <Clock className="w-3 h-3" />
