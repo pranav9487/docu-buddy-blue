@@ -1,39 +1,41 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Eye, EyeOff, MessageSquare, ArrowLeft } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { Eye, EyeOff, MessageSquare, ArrowLeft, Shield } from "lucide-react";
 
-export default function Login() {
+export default function AdminLogin() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string; general?: string }>({});
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const navigate = useNavigate();
 
   const validateForm = () => {
     const newErrors: { email?: string; password?: string } = {};
-    
+    let isValid = true;
+
     if (!email) {
       newErrors.email = "Email is required";
+      isValid = false;
     } else if (!/\S+@\S+\.\S+/.test(email)) {
-      newErrors.email = "Please enter a valid email";
+      newErrors.email = "Email is invalid";
+      isValid = false;
     }
-    
+
     if (!password) {
       newErrors.password = "Password is required";
-    } else if (password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters";
+      isValid = false;
     }
-    
+
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return isValid;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -42,26 +44,21 @@ export default function Login() {
     if (!validateForm()) return;
     
     setIsLoading(true);
-    setErrors({});
     
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      
-      if (error) {
-        setErrors({ general: error.message });
-        console.error("Login error:", error);
-      } else if (data?.user) {
-        console.log("Login successful");
-        navigate("/");
-      }
-    } catch (error) {
-      console.error("Unexpected error during login:", error);
-      setErrors({ general: "An unexpected error occurred. Please try again." });
-    } finally {
-      setIsLoading(false);
+    // Check admin credentials
+    if (email === "test@gmail.com" && password === "123456") {
+      // Simulate login request
+      setTimeout(() => {
+        console.log("Admin login successful");
+        // Set admin authentication in localStorage
+        localStorage.setItem('adminAuthenticated', 'true');
+        navigate("/admin");
+      }, 1000);
+    } else {
+      setTimeout(() => {
+        setIsLoading(false);
+        setErrors({ password: "Invalid admin credentials" });
+      }, 1000);
     }
   };
 
@@ -85,14 +82,14 @@ export default function Login() {
               {/* Logo */}
               <div className="flex justify-center mb-4">
                 <div className="w-12 h-12 hero-gradient rounded-xl flex items-center justify-center">
-                  <MessageSquare className="w-6 h-6 text-white" />
+                  <Shield className="w-6 h-6 text-white" />
                 </div>
               </div>
               <CardTitle className="text-2xl font-bold text-primary-dark">
-                Welcome Back
+                Admin Login
               </CardTitle>
               <p className="text-muted-foreground">
-                Sign in to access your DocsAI dashboard
+                Sign in to access the admin dashboard
               </p>
             </CardHeader>
             
@@ -104,7 +101,7 @@ export default function Login() {
                   <Input
                     id="email"
                     type="email"
-                    placeholder="you@company.com"
+                    placeholder="admin@company.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className={errors.email ? "border-destructive" : ""}
@@ -148,25 +145,17 @@ export default function Login() {
                   )}
                 </div>
 
-                {/* Remember Me & Forgot Password */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="remember"
-                      checked={rememberMe}
-                      onCheckedChange={(checked) => setRememberMe(checked as boolean)}
-                      disabled={isLoading}
-                    />
-                    <Label htmlFor="remember" className="text-sm text-muted-foreground">
-                      Remember me
-                    </Label>
-                  </div>
-                  <Link
-                    to="/forgot-password"
-                    className="text-sm text-primary hover:text-primary/80 transition-colors"
-                  >
-                    Forgot password?
-                  </Link>
+                {/* Remember Me */}
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="remember"
+                    checked={rememberMe}
+                    onCheckedChange={(checked) => setRememberMe(checked as boolean)}
+                    disabled={isLoading}
+                  />
+                  <Label htmlFor="remember" className="text-sm text-muted-foreground">
+                    Remember me
+                  </Label>
                 </div>
 
                 {/* Submit Button */}
@@ -188,23 +177,23 @@ export default function Login() {
                 </Button>
               </form>
 
-              {/* Divider */}
+              {/* Back to Regular Login */}
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
                   <span className="w-full border-t border-border" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
                   <span className="bg-card px-2 text-muted-foreground">
-                    Don't have an account?
+                    Regular User?
                   </span>
                 </div>
               </div>
 
-              {/* Sign Up Link */}
+              {/* Regular Login Link */}
               <div className="text-center">
-                <Link to="/signup">
+                <Link to="/login">
                   <Button variant="outline" size="lg" className="w-full">
-                    Create New Account
+                    Go to User Login
                   </Button>
                 </Link>
               </div>

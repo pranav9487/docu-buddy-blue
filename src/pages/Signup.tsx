@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Eye, EyeOff, MessageSquare, ArrowLeft, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Signup() {
   const [formData, setFormData] = useState({
@@ -21,6 +22,7 @@ export default function Signup() {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const navigate = useNavigate();
 
   const getPasswordStrength = (password: string) => {
     let score = 0;
@@ -76,13 +78,38 @@ export default function Signup() {
     if (!validateForm()) return;
     
     setIsLoading(true);
+    setErrors({});
     
-    // Simulate registration request
-    setTimeout(() => {
-      console.log("Registration attempt:", formData);
+    try {
+      // Register the user with Supabase
+      const { data, error } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            full_name: formData.fullName,
+          },
+        },
+      });
+      
+      if (error) {
+        setErrors({ general: error.message });
+        console.error("Registration error:", error);
+      } else if (data?.user) {
+        console.log("Registration successful");
+        // Redirect to login page or confirmation page
+        navigate("/login", { 
+          state: { 
+            message: "Registration successful! Please check your email to confirm your account." 
+          } 
+        });
+      }
+    } catch (error) {
+      console.error("Unexpected error during registration:", error);
+      setErrors({ general: "An unexpected error occurred. Please try again." });
+    } finally {
       setIsLoading(false);
-      // In real implementation, handle registration success/error here
-    }, 2000);
+    }
   };
 
   const handleInputChange = (field: string, value: string) => {

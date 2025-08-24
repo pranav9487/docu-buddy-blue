@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { supabase } from "@/integrations/supabase/client";
 import { 
   Upload, 
   FileText, 
@@ -16,7 +17,9 @@ import {
   CheckCircle,
   Clock,
   Cloud,
-  Activity
+  Activity,
+  Download,
+  User
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -30,7 +33,7 @@ interface Document {
 }
 
 export default function Admin() {
-  const [documents] = useState<Document[]>([
+  const [documents, setDocuments] = useState<Document[]>([
     { id: "1", filename: "Employee_Handbook_2024.pdf", fileSize: 2560000, uploadDate: new Date(), status: "ready", uploadedBy: "John Doe" },
     { id: "2", filename: "IT_Security_Policy.docx", fileSize: 1240000, uploadDate: new Date(Date.now() - 86400000), status: "processing", uploadedBy: "Jane Smith" },
     { id: "3", filename: "Project_Guidelines.txt", fileSize: 45000, uploadDate: new Date(Date.now() - 172800000), status: "error", uploadedBy: "Bob Johnson" },
@@ -41,10 +44,38 @@ export default function Admin() {
   const [isDragging, setIsDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
 
-  // Check if user is admin (mock implementation)
-  const isAdmin = true; // This will be replaced with real auth check
+  // Check if user is admin or regular user
+  const isAdmin = localStorage.getItem('adminAuthenticated') === 'true';
+  const [isUser, setIsUser] = useState(false);
+  const [userData, setUserData] = useState<any>(null);
+  
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data } = await supabase.auth.getSession();
+      const authenticated = !!data.session?.user;
+      setIsUser(authenticated);
+      
+      if (authenticated) {
+        setUserData(data.session.user);
+        console.log("Authenticated user:", data.session.user);
+      }
+    };
+    
+    checkAuth();
+    
+    // Listen for auth changes
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsUser(!!session?.user);
+      setUserData(session?.user || null);
+    });
+    
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
 
-  if (!isAdmin) {
+  // If not admin and not a regular user, show access restricted
+  if (!isAdmin && !isUser) {
     return (
       <div className="min-h-screen pt-16 flex items-center justify-center">
         <Card className="max-w-md w-full mx-4">
@@ -53,12 +84,14 @@ export default function Admin() {
               <AlertCircle className="w-8 h-8 text-destructive" />
             </div>
             <h2 className="text-xl font-semibold text-foreground mb-2">Access Restricted</h2>
-            <p className="text-muted-foreground mb-6">You don't have permission to view this page.</p>
+            <p className="text-muted-foreground mb-6">You need to be logged in to view this page.</p>
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => window.history.back()}>
                 Go Back
               </Button>
-              <Button variant="default">Contact Admin</Button>
+              <Button variant="default" onClick={() => window.location.href = "/login"}>
+                Login
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -166,6 +199,30 @@ export default function Admin() {
           <h1 className="text-3xl font-bold text-primary-dark mb-2">Admin Dashboard</h1>
           <p className="text-muted-foreground">Manage documents and system configuration</p>
         </div>
+        
+        {/* User info banner for authenticated users */}
+        {isUser && userData && (
+          <Card className="mb-6 border-primary/20">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <User className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Welcome, {userData.email}</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {isAdmin ? "Admin access granted" : "You have access to view documents"}
+                    </p>
+                  </div>
+                </div>
+                <Badge variant={isAdmin ? "default" : "secondary"}>
+                  {isAdmin ? "Admin" : "User"}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Status Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -232,6 +289,7 @@ export default function Admin() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Document Upload */}
+          {isAdmin && (
           <div className="lg:col-span-1">
             <Card className="border-border/50">
               <CardHeader>
@@ -292,6 +350,7 @@ export default function Admin() {
               </CardContent>
             </Card>
           </div>
+          )}
 
           {/* Document Management */}
           <div className="lg:col-span-2">
@@ -299,9 +358,9 @@ export default function Admin() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2">
-                    <FileText className="w-5 h-5" />
-                    Document Library
-                  </CardTitle>
+                <FileText className="w-5 h-5" />
+                {isAdmin ? "Document Library" : "Available Documents"}
+              </CardTitle>
                   <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm">
                       <RefreshCw className="w-4 h-4 mr-2" />
@@ -311,6 +370,12 @@ export default function Admin() {
                       <Filter className="w-4 h-4 mr-2" />
                       Filter
                     </Button>
+                    {isAdmin && (
+                      <Button variant="outline" size="sm">
+                        <Download className="w-4 h-4 mr-2" />
+                        Export
+                      </Button>
+                    )}
                   </div>
                 </div>
                 <div className="relative">
@@ -355,9 +420,11 @@ export default function Admin() {
                         <Button variant="ghost" size="sm">
                           <Eye className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        {isAdmin && (
+                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   ))}
