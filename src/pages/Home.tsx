@@ -1,12 +1,10 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { 
   MessageSquare, 
-  Mic, 
-  MicIcon, 
   Bot, 
   Shield, 
   Zap, 
@@ -17,8 +15,8 @@ import {
 } from "lucide-react";
 
 export default function Home() {
+  const navigate = useNavigate();
   const [question, setQuestion] = useState("");
-  const [isListening, setIsListening] = useState(false);
 
   // Mock auth state - will be replaced with real auth later
   const isAuthenticated = false;
@@ -30,15 +28,6 @@ export default function Home() {
       return;
     }
     console.log("Question:", question);
-  };
-
-  const handleVoiceInput = () => {
-    if (!isAuthenticated) {
-      alert("Login required for voice features");
-      return;
-    }
-    setIsListening(!isListening);
-    // Voice input logic will be implemented later
   };
 
   const features = [
@@ -101,11 +90,6 @@ export default function Home() {
                   </Button>
                 </Link>
               )}
-              <Link to="#demo">
-                <Button variant="outline" size="xl" className="w-full sm:w-auto">
-                  See Demo
-                </Button>
-              </Link>
             </div>
 
             {/* Stats */}
@@ -176,44 +160,22 @@ export default function Home() {
                     value={question}
                     onChange={(e) => setQuestion(e.target.value)}
                     placeholder="Ask anything about our internal docs..."
-                    className="text-lg h-14 pr-16 bg-muted/50 border-border/50 focus:bg-background"
+                    className="text-lg h-14 bg-muted/50 border-border/50 focus:bg-background"
                   />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleVoiceInput}
-                    className={`absolute right-2 top-2 ${
-                      isListening ? "text-red-500 animate-pulse" : "text-muted-foreground"
-                    }`}
-                    title={isAuthenticated ? "Voice Input" : "Login required for voice features"}
-                  >
-                    {isListening ? (
-                      <MicIcon className="w-5 h-5" />
-                    ) : (
-                      <Mic className="w-5 h-5" />
-                    )}
-                  </Button>
                 </div>
                 
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <Button 
-                    type="submit" 
-                    variant="cta" 
-                    size="lg" 
-                    className="flex-1"
-                    disabled={!question.trim()}
-                  >
-                    <Bot className="w-5 h-5 mr-2" />
-                    Ask Question
-                  </Button>
+                <div className="flex justify-center">
                   <Button 
                     type="button" 
-                    variant="outline" 
+                    variant="cta" 
                     size="lg"
-                    onClick={() => setQuestion("How do I access the employee handbook?")}
+                    className="w-full sm:w-2/3"
+                    onClick={() => {
+                      setQuestion("How do I access the employee handbook?");
+                      navigate("/chat");
+                    }}
                   >
-                    <Zap className="w-4 h-4 mr-2" />
+                    <Zap className="w-5 h-5 mr-2" />
                     Try Example
                   </Button>
                 </div>

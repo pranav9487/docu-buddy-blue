@@ -23,11 +23,10 @@ interface Message {
   timestamp: Date;
 }
 
-interface Conversation {
+interface FAQ {
   id: string;
-  title: string;
-  lastMessage: Date;
-  messageCount: number;
+  question: string;
+  answer: string;
 }
 
 export default function Chat() {
@@ -43,11 +42,33 @@ export default function Chat() {
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [conversations] = useState<Conversation[]>([
-    { id: "1", title: "Employee Handbook Questions", lastMessage: new Date(), messageCount: 12 },
-    { id: "2", title: "IT Support Procedures", lastMessage: new Date(Date.now() - 86400000), messageCount: 8 },
-    { id: "3", title: "Project Management Guidelines", lastMessage: new Date(Date.now() - 172800000), messageCount: 15 },
-  ]);
+  const [voiceError, setVoiceError] = useState<string>("");
+  const [expandedFaq, setExpandedFaq] = useState<string | null>(null);
+  
+  const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
+  const recognition = SpeechRecognition ? new SpeechRecognition() : null;
+  const faqs: FAQ[] = [
+    {
+      id: "1",
+      question: "How many days per week can employees work remotely under the new policy?",
+      answer: "Employees may work remotely up to 3 days per week, subject to manager approval."
+    },
+    {
+      id: "2",
+      question: "What is the deadline for enabling 2FA on company accounts?",
+      answer: "All employees must enable 2FA on their company accounts by September 15, 2025."
+    },
+    {
+      id: "3",
+      question: "How should employees submit refund requests, and how long do they take to process?",
+      answer: "Refund requests must be logged in the Finance Portal and require Finance Manager approval. Processing typically takes 5-7 business days."
+    },
+    {
+      id: "4",
+      question: "When is the next company-wide Townhall meeting scheduled?",
+      answer: "The next Townhall is scheduled for September 20, 2025, and will be held virtually via Zoom (link to be shared in Slack #announcements)."
+    }
+  ];
   
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -59,9 +80,17 @@ export default function Chat() {
     }
   }, [messages]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputValue.trim() || isLoading) return;
+  const handleSubmit = async (e?: React.FormEvent | null, overrideText?: string) => {
+    if (e?.preventDefault) e.preventDefault();
+    
+    const textToSend = overrideText || inputValue;
+    // Double check we have actual content
+    if (!textToSend?.trim() || isLoading) {
+      console.log('Empty message or loading, skipping submit');
+      return;
+    }
+    
+    console.log('Submitting message:', textToSend); // Debug log
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -149,9 +178,85 @@ export default function Chat() {
   };
 
   const handleVoiceInput = () => {
-    setIsListening(!isListening);
-    // Voice input logic will be implemented later
+    if (!recognition) {
+      setVoiceError("Voice recognition is not supported in your browser");
+      return;
+    }
+
+    if (isListening) {
+      recognition.stop();
+      setIsListening(false);
+    } else {
+      // Configure recognition
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      // Clear any previous errors
+      setVoiceError("");
+
+      // Setup recognition handlers
+      recognition.onstart = () => {
+        setIsListening(true);
+        // Don't clear the input - let user see what they had typed before
+      };
+
+      recognition.onresult = (event: any) => {
+        let currentTranscript = '';
+        
+        // Get the latest transcript
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          currentTranscript = event.results[i][0].transcript;
+        }
+
+        // Always update the input value with the latest transcript
+        setInputValue(currentTranscript);
+
+        // If this is the final result, stop listening but don't submit
+        if (event.results[event.results.length - 1].isFinal) {
+          recognition.stop();
+          setIsListening(false);
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error('Speech recognition error', event.error);
+        setVoiceError(`Error: ${event.error}`);
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      // Start recognition
+      try {
+        // Reset any previous state
+        setInputValue('');
+        setVoiceError('');
+        
+        // Add a small delay to ensure any previous instance is fully stopped
+        setTimeout(() => {
+          recognition.start();
+          console.log('Voice recognition started'); // Debug log
+        }, 100);
+      } catch (error) {
+        console.error('Failed to start speech recognition:', error);
+        setVoiceError("Failed to start voice recognition");
+        setIsListening(false);
+      }
+    }
   };
+
+  // Cleanup recognition on component unmount
+  useEffect(() => {
+    return () => {
+      if (recognition) {
+        recognition.stop();
+        setIsListening(false);
+      }
+    };
+  }, []);
 
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString('en-US', { 
@@ -178,34 +283,50 @@ export default function Chat() {
     <div className="min-h-screen pt-16 bg-background">
       <div className="flex h-[calc(100vh-4rem)]">
         {/* Sidebar - Desktop Only */}
-        <div className="hidden lg:flex w-80 border-r border-border bg-muted/30">
+        <div className="hidden lg:flex w-80 border-r border-border bg-muted/30 faq-sidebar">
           <div className="flex flex-col w-full">
-            {/* New Chat Button */}
-            <div className="p-4 border-b border-border">
-              <Button variant="default" size="lg" className="w-full">
-                <Plus className="w-4 h-4 mr-2" />
-                New Conversation
-              </Button>
-            </div>
-
-            {/* Conversations List */}
+            {/* FAQ Section */}
             <ScrollArea className="flex-1 p-4">
               <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-muted-foreground mb-4">Recent Conversations</h3>
-                {conversations.map((conv) => (
-                  <Card key={conv.id} className="cursor-pointer hover:shadow-soft transition-shadow border-border/50">
+                <h3 className="text-lg font-semibold text-foreground mb-4">Frequently Asked Questions</h3>
+                {faqs.map((faq) => (
+                  <Card 
+                    key={faq.id} 
+                    className="cursor-pointer hover:shadow-soft transition-shadow border-border/50"
+                    onClick={() => {
+                      if (expandedFaq === faq.id) {
+                        setExpandedFaq(null);
+                      } else {
+                        setExpandedFaq(faq.id);
+                        // Also send the question to the chat
+                        const userMessage: Message = {
+                          id: Date.now().toString(),
+                          content: faq.question,
+                          isUser: true,
+                          timestamp: new Date(),
+                        };
+                        const aiMessage: Message = {
+                          id: (Date.now() + 1).toString(),
+                          content: faq.answer,
+                          isUser: false,
+                          timestamp: new Date(),
+                        };
+                        setMessages(prev => [...prev, userMessage, aiMessage]);
+                      }
+                    }}
+                  >
                     <CardContent className="p-4">
-                      <div className="flex items-start justify-between mb-2">
-                        <h4 className="text-sm font-medium text-foreground line-clamp-2">
-                          {conv.title}
-                        </h4>
-                        <div className="text-xs text-muted-foreground ml-2">
-                          {formatDate(conv.lastMessage)}
+                      <div className="flex flex-col space-y-2">
+                        <div className="flex items-start justify-between">
+                          <h4 className="text-sm font-medium text-foreground">
+                            {faq.question}
+                          </h4>
                         </div>
-                      </div>
-                      <div className="flex items-center text-xs text-muted-foreground">
-                        <MessageSquare className="w-3 h-3 mr-1" />
-                        {conv.messageCount} messages
+                        {expandedFaq === faq.id && (
+                          <div className="text-sm text-muted-foreground mt-2 p-2 bg-muted/30 rounded-md">
+                            {faq.answer}
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -230,10 +351,17 @@ export default function Chat() {
                 </div>
               </div>
               
-              {/* Mobile New Chat Button */}
+              {/* Mobile FAQ Toggle Button */}
               <div className="lg:hidden">
-                <Button variant="outline" size="sm">
-                  <Plus className="w-4 h-4" />
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    const sidebar = document.querySelector('.faq-sidebar');
+                    sidebar?.classList.toggle('hidden');
+                  }}
+                >
+                  <MessageSquare className="w-4 h-4" />
                 </Button>
               </div>
             </div>
@@ -322,9 +450,9 @@ export default function Chat() {
                     ref={inputRef}
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
-                    placeholder="Ask about your documentation..."
+                    placeholder={isListening ? "Listening..." : "Ask about your documentation..."}
                     className="min-h-[48px] pr-12 resize-none bg-muted/50 border-border/50 focus:bg-background"
-                    disabled={isLoading}
+                    disabled={isLoading || isListening}
                   />
                   <Button
                     type="button"
@@ -343,6 +471,11 @@ export default function Chat() {
                       <Mic className="w-4 h-4" />
                     )}
                   </Button>
+                  {voiceError && (
+                    <div className="absolute -bottom-6 left-0 text-xs text-red-500">
+                      {voiceError}
+                    </div>
+                  )}
                 </div>
                 <Button 
                   type="submit" 

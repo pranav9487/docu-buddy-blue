@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,8 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; general?: string }>({});
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as { from?: string })?.from || "/";
 
   const validateForm = () => {
     const newErrors: { email?: string; password?: string } = {};
@@ -50,10 +52,15 @@ export default function Login() {
         password,
       });
       
+      setIsLoading(false);
+
       if (error) {
         setErrors({ general: error.message });
         console.error("Login error:", error);
-      } else if (data?.user) {
+        return;
+      }
+
+      if (data?.user) {
         console.log("Login successful");
         
         // Get user role from their metadata first
@@ -61,11 +68,12 @@ export default function Login() {
         
         // Try to get more complete profile data from database
         try {
+          type Profile = { role: string };
           const { data: profile } = await supabase
             .from('profiles')
             .select('role')
             .eq('id', data.user.id)
-            .single() as any;
+            .single() as { data: Profile | null };
           
           if (profile?.role) {
             userRole = profile.role;
@@ -73,29 +81,30 @@ export default function Login() {
           } else {
             console.log("Using role from user metadata:", userRole);
           }
-        } catch (error) {
+        } catch (profileError) {
           console.log("Database not set up, using metadata role:", userRole);
         }
         
         // Store user role in localStorage
         localStorage.setItem('userRole', userRole);
-        
-        // Set admin flag and redirect based on role
+
+        // Set admin flag based on role
         if (userRole === "admin") {
           localStorage.setItem('adminAuthenticated', 'true');
-          navigate("/admin");
+          // Navigate to admin page for admins
+          navigate("/admin", { replace: true });
         } else {
           localStorage.setItem('adminAuthenticated', 'false');
-          navigate("/");
+          // Navigate to the original requested page or home
+          navigate(from, { replace: true });
         }
         
         console.log("User role:", userRole);
       }
-    } catch (error) {
-      console.error("Unexpected error during login:", error);
-      setErrors({ general: "An unexpected error occurred. Please try again." });
-    } finally {
+    } catch (error: any) {
       setIsLoading(false);
+      setErrors({ general: error.message || "An error occurred during login" });
+      console.error("Login error:", error);
     }
   };
 
