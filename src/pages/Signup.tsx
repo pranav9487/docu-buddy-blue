@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { Eye, EyeOff, MessageSquare, ArrowLeft, Check } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Eye, EyeOff, MessageSquare, ArrowLeft, Check, Shield, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -17,6 +18,7 @@ export default function Signup() {
     password: "",
     confirmPassword: "",
   });
+  const [userRole, setUserRole] = useState<"admin" | "team_member">("team_member");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
@@ -68,6 +70,10 @@ export default function Signup() {
       newErrors.terms = "Please accept the terms of service";
     }
     
+    if (!userRole) {
+      newErrors.role = "Please select a role";
+    }
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -88,6 +94,7 @@ export default function Signup() {
         options: {
           data: {
             full_name: formData.fullName,
+            role: userRole,
           },
         },
       });
@@ -97,12 +104,62 @@ export default function Signup() {
         console.error("Registration error:", error);
       } else if (data?.user) {
         console.log("Registration successful");
-        // Redirect to login page or confirmation page
-        navigate("/login", { 
-          state: { 
-            message: "Registration successful! Please check your email to confirm your account." 
-          } 
-        });
+        
+        // Store user profile in the profiles table
+        // The database trigger should automatically create the profile, but let's ensure it exists
+        try {
+          // First, let's wait a moment for the trigger to execute
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Try to fetch the profile to verify it was created by the trigger
+          const { data: profile, error: fetchError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', data.user.id)
+            .single() as any; // Type assertion needed until tables are created
+          
+          if (fetchError || !profile) {
+            // If trigger didn't work, manually insert the profile
+            const { error: insertError } = await supabase
+              .from('profiles')
+              .insert({
+                id: data.user.id,
+                full_name: formData.fullName,
+                email: formData.email,
+                role: userRole,
+              } as any); // Type assertion needed until tables are created
+            
+            if (insertError) {
+              console.log("Profile creation failed. Please ensure database tables are set up:", insertError);
+              // Still proceed - user can function with just auth metadata
+            } else {
+              console.log("Profile manually created successfully");
+            }
+          } else {
+            console.log("Profile automatically created by trigger");
+          }
+        } catch (profileError) {
+          console.log("Database tables not set up. Please run the SQL setup:", profileError);
+          // Show user-friendly message
+          setErrors({ general: "Account created successfully, but database setup is incomplete. Please contact administrator." });
+        }
+        
+        // Store role in localStorage and redirect based on role
+        localStorage.setItem('userRole', userRole);
+        
+        // If user signed up as admin, set admin flag and redirect to admin page
+        if (userRole === "admin") {
+          localStorage.setItem('adminAuthenticated', 'true');
+          navigate("/admin");
+        } else {
+          // For team members, redirect to login page
+          localStorage.setItem('adminAuthenticated', 'false');
+          navigate("/login", { 
+            state: { 
+              message: "Registration successful! Please check your email to confirm your account." 
+            } 
+          });
+        }
       }
     } catch (error) {
       console.error("Unexpected error during registration:", error);
@@ -290,6 +347,41 @@ export default function Signup() {
                   )}
                 </div>
 
+                {/* Role Selection */}
+                <div className="space-y-2">
+                  <Label>Register as</Label>
+                  <RadioGroup 
+                    value={userRole} 
+                    onValueChange={(value) => setUserRole(value as "admin" | "team_member")}
+                    className="flex flex-col space-y-2 mt-2"
+                  >
+                    <div className="flex items-center space-x-2 border rounded-md p-3 hover:bg-muted/50 transition-colors cursor-pointer">
+                      <RadioGroupItem value="admin" id="admin-signup" />
+                      <Label htmlFor="admin-signup" className="flex items-center cursor-pointer">
+                        <Shield className="w-4 h-4 mr-2 text-primary" />
+                        <div>
+                          <span className="font-medium">Admin</span>
+                          <p className="text-xs text-muted-foreground">Create teams and manage documents</p>
+                        </div>
+                      </Label>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2 border rounded-md p-3 hover:bg-muted/50 transition-colors cursor-pointer">
+                      <RadioGroupItem value="team_member" id="team_member-signup" />
+                      <Label htmlFor="team_member-signup" className="flex items-center cursor-pointer">
+                        <Users className="w-4 h-4 mr-2 text-primary" />
+                        <div>
+                          <span className="font-medium">Team Member</span>
+                          <p className="text-xs text-muted-foreground">Access documents shared by your team admin</p>
+                        </div>
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                  {errors.role && (
+                    <p className="text-sm text-destructive">{errors.role}</p>
+                  )}
+                </div>
+                
                 {/* Terms Acceptance */}
                 <div className="space-y-2">
                   <div className="flex items-start space-x-2">

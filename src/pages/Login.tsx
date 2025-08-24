@@ -55,7 +55,41 @@ export default function Login() {
         console.error("Login error:", error);
       } else if (data?.user) {
         console.log("Login successful");
-        navigate("/");
+        
+        // Get user role from their metadata first
+        let userRole = data.user.user_metadata?.role || 'team_member';
+        
+        // Try to get more complete profile data from database
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', data.user.id)
+            .single() as any;
+          
+          if (profile?.role) {
+            userRole = profile.role;
+            console.log("Role retrieved from database:", userRole);
+          } else {
+            console.log("Using role from user metadata:", userRole);
+          }
+        } catch (error) {
+          console.log("Database not set up, using metadata role:", userRole);
+        }
+        
+        // Store user role in localStorage
+        localStorage.setItem('userRole', userRole);
+        
+        // Set admin flag and redirect based on role
+        if (userRole === "admin") {
+          localStorage.setItem('adminAuthenticated', 'true');
+          navigate("/admin");
+        } else {
+          localStorage.setItem('adminAuthenticated', 'false');
+          navigate("/");
+        }
+        
+        console.log("User role:", userRole);
       }
     } catch (error) {
       console.error("Unexpected error during login:", error);
@@ -97,6 +131,12 @@ export default function Login() {
             </CardHeader>
             
             <CardContent className="space-y-6">
+              {errors.general && (
+                <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md mb-4">
+                  {errors.general}
+                </div>
+              )}
+              
               <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Email Field */}
                 <div className="space-y-2">
@@ -168,7 +208,7 @@ export default function Login() {
                     Forgot password?
                   </Link>
                 </div>
-
+                
                 {/* Submit Button */}
                 <Button 
                   type="submit" 
