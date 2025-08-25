@@ -39,7 +39,7 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
-# DocuBuddy - AI-Powered Documentation Assistant
+# DocsAi - AI-Powered Documentation Assistant
 
 DocuBuddy is an intelligent documentation assistant that helps teams access and understand their company's knowledge base efficiently using natural language processing.
 
